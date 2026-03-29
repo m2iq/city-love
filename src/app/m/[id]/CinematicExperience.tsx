@@ -54,12 +54,51 @@ export default function CinematicExperience({ message }: CinematicExperienceProp
   const [hearting, setHearting] = useState(false);
   const [giftEmerged, setGiftEmerged] = useState(false);
   const [travelProgress, setTravelProgress] = useState(0);
-  // Detect mobile for performance optimizations
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+  const [lowPerformanceMode, setLowPerformanceMode] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const deviceMemory = 'deviceMemory' in navigator ? (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8 : 8;
+    const hardwareConcurrency = navigator.hardwareConcurrency || 8;
+    const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+    const isSmallScreen = window.innerWidth < 900;
+
+    setLowPerformanceMode(
+      media.matches
+      || coarsePointer
+      || isSmallScreen
+      || deviceMemory <= 4
+      || hardwareConcurrency <= 4,
+    );
+
+    const handlePreferenceChange = () => {
+      const updatedCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
+      const updatedSmallScreen = window.innerWidth < 900;
+      setLowPerformanceMode(
+        media.matches
+        || updatedCoarsePointer
+        || updatedSmallScreen
+        || deviceMemory <= 4
+        || hardwareConcurrency <= 4,
+      );
+    };
+
+    media.addEventListener('change', handlePreferenceChange);
+    window.addEventListener('resize', handlePreferenceChange);
+
+    return () => {
+      media.removeEventListener('change', handlePreferenceChange);
+      window.removeEventListener('resize', handlePreferenceChange);
+    };
+  }, []);
 
   const sender = provinces[message.sender_province];
   const receiver = provinces[message.receiver_province];
   const heartColor = message.heart_color || '#ff2d55';
+  const particleCount = lowPerformanceMode ? 5 : 18;
+  const floatingHeartsCount = lowPerformanceMode ? 0 : 6;
 
   const phaseIndex = PHASES.indexOf(phase);
 
@@ -101,6 +140,8 @@ export default function CinematicExperience({ message }: CinematicExperienceProp
     let frameId = 0;
     const duration = 6200;
     const start = performance.now();
+    const minFrameGap = lowPerformanceMode ? 1000 / 18 : 1000 / 30;
+    let lastCommittedAt = 0;
 
     const tick = (now: number) => {
       const elapsed = now - start;
@@ -109,7 +150,12 @@ export default function CinematicExperience({ message }: CinematicExperienceProp
       const eased = normalized < 0.5
         ? 4 * normalized * normalized * normalized
         : 1 - Math.pow(-2 * normalized + 2, 3) / 2;
-      setTravelProgress(eased);
+
+      if (now - lastCommittedAt >= minFrameGap || normalized >= 1) {
+        lastCommittedAt = now;
+        setTravelProgress(eased);
+      }
+
       if (normalized < 1) {
         frameId = requestAnimationFrame(tick);
       }
@@ -119,7 +165,7 @@ export default function CinematicExperience({ message }: CinematicExperienceProp
     frameId = requestAnimationFrame(tick);
 
     return () => cancelAnimationFrame(frameId);
-  }, [phase]);
+  }, [lowPerformanceMode, phase]);
 
   const handleHeart = useCallback(async () => {
     if (hearting) return;
@@ -144,21 +190,26 @@ export default function CinematicExperience({ message }: CinematicExperienceProp
   const mapVisible = phaseIndex >= 1 && phaseIndex <= 4;
   const isTraveling = phase === 'traveling';
   const isDelivery = phase === 'delivery';
+  const mapBlurFilter = lowPerformanceMode
+    ? (isDelivery ? 'brightness(0.55)' : 'brightness(1)')
+    : (isDelivery ? 'blur(8px) brightness(0.2)' : 'blur(0px) brightness(1)');
+  const showAmbientParticles = phaseIndex >= 1 && particleCount > 0;
+  const showFloatingHearts = phaseIndex >= 3 && floatingHeartsCount > 0;
 
   return (
     <main className="relative min-h-dvh overflow-hidden cinematic-bg">
       {/* Deep animated gradient background */}
-      <div className="cinematic-bg-layer" />
+      <div className={`cinematic-bg-layer${lowPerformanceMode ? ' cinematic-bg-layer-lite' : ''}`} />
 
       {/* Subtle light rays */}
-      <div className="cinematic-light-rays" />
+      {!lowPerformanceMode && <div className="cinematic-light-rays" />}
 
       {/* Cinematic vignette */}
       <div className="cinematic-vignette fixed inset-0 z-1 pointer-events-none" />
 
       {/* Ambient particles */}
-      {phaseIndex >= 1 && <ParticleField color={heartColor} count={isMobile ? 10 : 25} />}
-      {phaseIndex >= 3 && <FloatingHearts count={isMobile ? 4 : 8} color={heartColor} />}
+      {showAmbientParticles && <ParticleField color={heartColor} count={particleCount} />}
+      {showFloatingHearts && <FloatingHearts count={floatingHeartsCount} color={heartColor} />}
 
       {/* ═══ Phase 1: Dark Intro ═══ */}
       <AnimatePresence>
@@ -208,15 +259,15 @@ export default function CinematicExperience({ message }: CinematicExperienceProp
       <AnimatePresence>
         {mapVisible && (
           <motion.div
-            className={`fixed inset-0${isDelivery ? ' camera-shake' : ''}`}
+            className={`fixed inset-0${isDelivery && !lowPerformanceMode ? ' camera-shake' : ''}`}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0, scale: 0.94, filter: 'blur(12px)' }}
             transition={{ duration: 0.9 }}
           >
             {/* Cinematic letterbox bars */}
-            <div className="fixed inset-x-0 top-0 z-[8] h-[8vh] bg-black pointer-events-none" />
-            <div className="fixed inset-x-0 bottom-0 z-[8] h-[8vh] bg-black pointer-events-none" />
+            <div className="fixed inset-x-0 top-0 z-8 h-[8vh] bg-black pointer-events-none" />
+            <div className="fixed inset-x-0 bottom-0 z-8 h-[8vh] bg-black pointer-events-none" />
 
             <div className="relative w-full h-full">
               {/* Status text — floating above the map */}
@@ -264,13 +315,8 @@ export default function CinematicExperience({ message }: CinematicExperienceProp
               {/* Iraq map — full screen, cinematic camera enabled */}
               <motion.div
                 className="absolute inset-0"
-                animate={{
-                  filter:
-                    isDelivery
-                      ? 'blur(8px) brightness(0.2)'
-                      : 'blur(0px) brightness(1)',
-                }}
-                transition={{ duration: 1.4, ease: 'easeInOut' }}
+                animate={{ filter: mapBlurFilter }}
+                transition={{ duration: lowPerformanceMode ? 0.5 : 1.4, ease: 'easeInOut' }}
               >
                 <IraqMap
                   senderProvince={
@@ -283,7 +329,8 @@ export default function CinematicExperience({ message }: CinematicExperienceProp
                   showPath={phase === 'traveling' || phase === 'delivery'}
                   travelProgress={travelProgress}
                   heartColor={heartColor}
-                  cinematicCamera
+                  cinematicCamera={!lowPerformanceMode}
+                  lowPerformance={lowPerformanceMode}
                 />
               </motion.div>
             </div>
@@ -311,7 +358,7 @@ export default function CinematicExperience({ message }: CinematicExperienceProp
 
             {/* Screen flash on emergence */}
             <motion.div
-              className="fixed inset-0 pointer-events-none z-[22]"
+              className="fixed inset-0 pointer-events-none z-22"
               initial={{ opacity: 0 }}
               animate={{ opacity: [0, 0.8, 0] }}
               transition={{ duration: 0.8, times: [0, 0.1, 1], ease: 'easeOut' }}
@@ -322,16 +369,16 @@ export default function CinematicExperience({ message }: CinematicExperienceProp
             <motion.div
               className="fixed inset-0 pointer-events-none"
               style={{ background: `radial-gradient(ellipse at 50% 50%, ${heartColor}20 0%, transparent 50%)` }}
-              animate={{ opacity: [0.3, 0.7, 0.3] }}
-              transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+              animate={{ opacity: lowPerformanceMode ? 0.35 : [0.3, 0.7, 0.3] }}
+              transition={lowPerformanceMode ? { duration: 0.2 } : { duration: 3, repeat: Infinity, ease: 'easeInOut' }}
             />
 
             {/* Spotlight */}
-            <div className="spotlight-cone" />
-            <div className="spotlight-source" />
+            {!lowPerformanceMode && <div className="spotlight-cone" />}
+            {!lowPerformanceMode && <div className="spotlight-source" />}
 
             {/* Shockwave rings */}
-            {Array.from({ length: 3 }).map((_, i) => (
+            {Array.from({ length: lowPerformanceMode ? 1 : 3 }).map((_, i) => (
               <motion.div
                 key={`ring-${i}`}
                 className="fixed pointer-events-none rounded-full"

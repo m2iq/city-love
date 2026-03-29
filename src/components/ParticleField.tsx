@@ -21,7 +21,10 @@ export default function ParticleField({ color = '#ff2d55', count = 50 }: Particl
     if (!ctx) return;
 
     let animationId: number;
-    const dpr = Math.min(window.devicePixelRatio, 2);
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+    const isLowPower = prefersReducedMotion || coarsePointer || window.innerWidth < 900;
+    const dpr = isLowPower ? 1 : Math.min(window.devicePixelRatio, 2);
 
     const resize = () => {
       canvas.width = window.innerWidth * dpr;
@@ -49,7 +52,9 @@ export default function ParticleField({ color = '#ff2d55', count = 50 }: Particl
       icon: IconType;
     }
 
-    const particles: Particle[] = Array.from({ length: count }, () => ({
+    const activeCount = isLowPower ? Math.min(count, 8) : count;
+
+    const particles: Particle[] = Array.from({ length: activeCount }, () => ({
       x: Math.random() * window.innerWidth,
       y: Math.random() * window.innerHeight,
       size: 3 + Math.random() * 5,
@@ -121,6 +126,11 @@ export default function ParticleField({ color = '#ff2d55', count = 50 }: Particl
     };
 
     const animate = () => {
+      if (document.hidden) {
+        animationId = requestAnimationFrame(animate);
+        return;
+      }
+
       ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
 
       particles.forEach((p) => {

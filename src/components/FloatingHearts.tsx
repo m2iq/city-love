@@ -19,14 +19,17 @@ export default function FloatingHearts({ count = 20, color = '#ff2d55' }: Floati
     if (!ctx) return;
 
     let animationId: number;
-    const dpr = Math.min(window.devicePixelRatio, 2);
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+    const isLowPower = prefersReducedMotion || coarsePointer || window.innerWidth < 900;
+    const dpr = isLowPower ? 1 : Math.min(window.devicePixelRatio, 2);
 
     const resize = () => {
       canvas.width = window.innerWidth * dpr;
       canvas.height = window.innerHeight * dpr;
       canvas.style.width = window.innerWidth + 'px';
       canvas.style.height = window.innerHeight + 'px';
-      ctx.scale(dpr, dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
     resize();
     window.addEventListener('resize', resize);
@@ -86,6 +89,11 @@ export default function FloatingHearts({ count = 20, color = '#ff2d55' }: Floati
     };
 
     const animate = () => {
+      if (document.hidden) {
+        animationId = requestAnimationFrame(animate);
+        return;
+      }
+
       ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
 
       hearts.forEach((h) => {
@@ -116,7 +124,7 @@ export default function FloatingHearts({ count = 20, color = '#ff2d55' }: Floati
     <canvas
       ref={canvasRef}
       className="fixed inset-0 pointer-events-none"
-      style={{ zIndex: 1 }}
+      style={{ zIndex: 1, willChange: 'transform' }}
     />
   );
 }

@@ -21,6 +21,7 @@ interface IraqMapProps {
   heartColor?: string;
   interactive?: boolean;
   cinematicCamera?: boolean;
+  lowPerformance?: boolean;
 }
 
 function hexToRgba(color: string, alpha: number) {
@@ -79,28 +80,38 @@ function ProvincePulse({ cx, cy, color }: { cx: number; cy: number; color: strin
   );
 }
 
-function TravelPath({ sender, receiver, heartColor, progress }: {
+function TravelPath({ sender, receiver, heartColor, progress, lowPerformance = false }: {
   sender: Province;
   receiver: Province;
   heartColor: string;
   progress: number;
+  lowPerformance?: boolean;
 }) {
   const pathRef = useRef<SVGPathElement>(null);
   const glowRef = useRef<SVGPathElement>(null);
   const heartRef = useRef<SVGGElement>(null);
   const pathData = useMemo(() => getCurvedPath(sender, receiver), [sender, receiver]);
+  const pathLengthRef = useRef(0);
+
+  useLayoutEffect(() => {
+    const path = pathRef.current;
+    if (!path) return;
+    pathLengthRef.current = path.getTotalLength();
+  }, [pathData]);
 
   // All DOM updates in one pass — useLayoutEffect runs before paint (zero visual lag)
   useLayoutEffect(() => {
     const path = pathRef.current;
-    if (!path) return;
-    const len = path.getTotalLength();
+    const len = pathLengthRef.current;
+    if (!path || !len) return;
     if (!len) return;
     const clamped = Math.max(0, Math.min(progress, 1));
     const drawn = len * clamped;
     const dashVal = `${drawn} ${len}`;
     path.setAttribute('stroke-dasharray', dashVal);
-    glowRef.current?.setAttribute('stroke-dasharray', dashVal);
+    if (!lowPerformance) {
+      glowRef.current?.setAttribute('stroke-dasharray', dashVal);
+    }
 
     const heart = heartRef.current;
     if (heart) {
@@ -116,21 +127,23 @@ function TravelPath({ sender, receiver, heartColor, progress }: {
 
   return (
     <g pointerEvents="none">
-      <path
-        ref={glowRef}
-        d={pathData}
-        fill="none"
-        stroke={hexToRgba(heartColor, 0.25)}
-        strokeWidth={10}
-        strokeLinecap="round"
-        strokeDasharray="0 99999"
-      />
+      {!lowPerformance && (
+        <path
+          ref={glowRef}
+          d={pathData}
+          fill="none"
+          stroke={hexToRgba(heartColor, 0.25)}
+          strokeWidth={10}
+          strokeLinecap="round"
+          strokeDasharray="0 99999"
+        />
+      )}
       <path
         ref={pathRef}
         d={pathData}
         fill="none"
         stroke={heartColor}
-        strokeWidth={2.8}
+        strokeWidth={lowPerformance ? 2.2 : 2.8}
         strokeLinecap="round"
         opacity={0.9}
         strokeDasharray="0 99999"
@@ -233,6 +246,7 @@ function IraqMap({
   heartColor = '#ff2d55',
   interactive = false,
   cinematicCamera = false,
+  lowPerformance = false,
 }: IraqMapProps) {
   const provinceEntries = useMemo(() => Object.values(provinces), []);
   const sender = senderProvince ? provinces[senderProvince] : undefined;
@@ -242,6 +256,22 @@ function IraqMap({
 
   // Ref to the SVG group that receives the camera transform
   const cameraGroupRef = useRef<SVGGElement>(null);
+  const samplerPathRef = useRef<SVGPathElement | null>(null);
+  const samplerLengthRef = useRef(0);
+
+  useLayoutEffect(() => {
+    if (!cinematicCamera || !showPath || !sender || !receiver) return;
+    const sampler = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    sampler.setAttribute('d', getCurvedPath(sender, receiver));
+    samplerPathRef.current = sampler;
+    samplerLengthRef.current = sampler.getTotalLength();
+
+    return () => {
+      samplerPathRef.current = null;
+      samplerLengthRef.current = 0;
+    };
+  }, [cinematicCamera, receiver, sender, showPath]);
+
   // Live camera tracking — follows the heart exactly along the bezier path, zero lag
   useLayoutEffect(() => {
     if (!cinematicCamera || !showPath || !sender || !receiver) return;
@@ -252,37 +282,36 @@ function IraqMap({
     gsap.killTweensOf(el);
 
     // Sample the exact heart position on the bezier arc
-    const d = getCurvedPath(sender, receiver);
-    const sampler = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    sampler.setAttribute('d', d);
-    const len = sampler.getTotalLength();
+    const sampler = samplerPathRef.current;
+    const len = samplerLengthRef.current;
     if (!len) return;
 
     const clamped = Math.max(0, Math.min(travelProgress, 1));
-    const pt = sampler.getPointAtLength(len * clamped);
-    const followZoom = 2.0;
+    const pt = sampler?.getPointAtLength(len * clamped);
+    if (!pt) return;
+    const followZoom = lowPerformance ? 1.35 : 2.0;
     el.setAttribute(
       'transform',
       `translate(${CX - pt.x * followZoom},${CY - pt.y * followZoom}) scale(${followZoom})`,
     );
-  }, [cinematicCamera, showPath, sender, receiver, travelProgress]);
+  }, [cinematicCamera, lowPerformance, showPath, sender, receiver, travelProgress]);
 
   // Smooth GSAP transitions for non-travel phases (map-appear → overview, sender-glow → zoom sender)
   useEffect(() => {
     const el = cameraGroupRef.current;
     if (!el || !cinematicCamera || showPath) return;
 
-    const zoom = sender ? 2.0 : 1.0;
+    const zoom = sender ? (lowPerformance ? 1.35 : 2.0) : 1.0;
     const tx = sender ? CX - sender.x * zoom : 0;
     const ty = sender ? CY - sender.y * zoom : 0;
 
     gsap.to(el, {
       attr: { transform: `translate(${tx},${ty}) scale(${zoom})` },
-      duration: 1.6,
+      duration: lowPerformance ? 0.7 : 1.6,
       ease: 'power2.inOut',
       overwrite: true,
     });
-  }, [cinematicCamera, sender, showPath]);
+  }, [cinematicCamera, lowPerformance, sender, showPath]);
 
   const wrapperClass = cinematicCamera
     ? `relative w-full h-full ${className}`
@@ -333,26 +362,47 @@ function IraqMap({
             <stop offset="0%" stopColor="#d8efff" />
             <stop offset="100%" stopColor="#5ba3e6" />
           </linearGradient>
-          <pattern id="mapGrid" width="34" height="34" patternUnits="userSpaceOnUse">
-            <path d="M 34 0 L 0 0 0 34" fill="none" stroke="rgba(123, 181, 255, 0.08)" strokeWidth="1" />
-          </pattern>
-          <filter id="mapShadow" x="-20%" y="-20%" width="140%" height="140%">
-            <feDropShadow dx="0" dy="18" stdDeviation="22" floodColor="rgba(0, 0, 0, 0.42)" />
-          </filter>
+          {!lowPerformance && (
+            <pattern id="mapGrid" width="34" height="34" patternUnits="userSpaceOnUse">
+              <path d="M 34 0 L 0 0 0 34" fill="none" stroke="rgba(123, 181, 255, 0.08)" strokeWidth="1" />
+            </pattern>
+          )}
+          {!lowPerformance && (
+            <filter id="mapShadow" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="18" stdDeviation="22" floodColor="rgba(0, 0, 0, 0.42)" />
+            </filter>
+          )}
         </defs>
 
         {/* Static background (outside camera transform so it always fills) */}
         <rect x="0" y="0" width={VIEWBOX_WIDTH} height={VIEWBOX_HEIGHT} rx="36" fill="url(#mapBackdrop)" />
-        <rect x="0" y="0" width={VIEWBOX_WIDTH} height={VIEWBOX_HEIGHT} rx="36" fill="url(#mapGlow)" />
-        <rect x="0" y="0" width={VIEWBOX_WIDTH} height={VIEWBOX_HEIGHT} rx="36" fill="url(#mapGrid)" opacity="0.9" />
+        <rect x="0" y="0" width={VIEWBOX_WIDTH} height={VIEWBOX_HEIGHT} rx="36" fill={lowPerformance ? 'rgba(12, 34, 60, 0.3)' : 'url(#mapGlow)'} />
+        {!lowPerformance && <rect x="0" y="0" width={VIEWBOX_WIDTH} height={VIEWBOX_HEIGHT} rx="36" fill="url(#mapGrid)" opacity="0.9" />}
 
         {/* Camera group — GSAP animates the SVG transform attribute on this element */}
         <g ref={cameraGroupRef} clipPath={cinematicCamera ? 'url(#mapClip)' : undefined}>
-          <g filter="url(#mapShadow)">
+          <g filter={lowPerformance ? undefined : 'url(#mapShadow)'}>
             {provinceEntries.map((province, index) => {
               const isSender = province.id === senderProvince;
               const isReceiver = province.id === receiverProvince;
               const isActive = province.id === activeProvince || isSender || isReceiver;
+
+              if (lowPerformance) {
+                return (
+                  <path
+                    key={province.id}
+                    d={province.path}
+                    fill={provinceFill(province.id, senderProvince, receiverProvince, activeProvince || undefined, heartColor)}
+                    stroke={isActive ? '#f8fbff' : 'rgba(143, 194, 247, 0.42)'}
+                    strokeWidth={isActive ? 2.1 : 1.4}
+                    vectorEffect="non-scaling-stroke"
+                    onMouseEnter={() => interactive && setHoveredProvince(province.id)}
+                    onMouseLeave={() => interactive && setHoveredProvince((current) => (current === province.id ? null : current))}
+                    onClick={() => interactive && onProvinceClick?.(province)}
+                    style={{ cursor: interactive ? 'pointer' : 'default' }}
+                  />
+                );
+              }
 
               return (
                 <motion.path
@@ -383,6 +433,7 @@ function IraqMap({
               receiver={receiver}
               heartColor={heartColor}
               progress={travelProgress}
+              lowPerformance={lowPerformance}
             />
           )}
 
@@ -395,7 +446,7 @@ function IraqMap({
               <g key={`${province.id}-marker`}>
                 {(interactive || isSender || isReceiver || province.id === activeProvince) && (
                   <>
-                    {(isSender || isReceiver) && (
+                    {!lowPerformance && (isSender || isReceiver) && (
                       <ProvincePulse
                         cx={province.x}
                         cy={province.y}
@@ -405,10 +456,10 @@ function IraqMap({
                     <circle
                       cx={province.x}
                       cy={province.y}
-                      r={isSender || isReceiver ? 5.5 : 3.2}
+                      r={isSender || isReceiver ? (lowPerformance ? 4.6 : 5.5) : 3.2}
                       fill={isSender ? heartColor : isReceiver ? '#fbbf24' : '#cae5ff'}
                       stroke="rgba(255,255,255,0.9)"
-                      strokeWidth={1.4}
+                      strokeWidth={lowPerformance ? 1.1 : 1.4}
                       vectorEffect="non-scaling-stroke"
                     />
                   </>

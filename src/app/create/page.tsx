@@ -23,10 +23,10 @@ const provinceOptions = provinceList.map((p) => ({
 }));
 
 const themes = [
-  { value: 'romantic', label: 'قلب ملتهب' },
-  { value: 'golden', label: 'بريق الشمس' },
-  { value: 'midnight', label: 'سحر الليل' },
-  { value: 'sunset', label: 'أفق الحنين' },
+  { value: 'romantic', label: 'زهري' },
+  { value: 'golden', label: 'ذهبي' },
+  { value: 'midnight', label: ' بنفسجي ' },
+  { value: 'sunset', label: ' برتقالي ' },
 ];
 
 const heartColors: Record<string, string> = {

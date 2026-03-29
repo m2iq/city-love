@@ -626,6 +626,13 @@ html {
   animation: bg-drift 20s ease-in-out infinite alternate;
 }
 
+.cinematic-bg-layer-lite {
+  background:
+    radial-gradient(ellipse at 50% 20%, rgba(30, 80, 170, 0.1) 0%, transparent 45%),
+    radial-gradient(ellipse at 50% 80%, rgba(200, 60, 90, 0.06) 0%, transparent 45%);
+  animation: none;
+}
+
 /* Orphaned R3F styles removed */
 
 @keyframes bg-drift {
