@@ -60,6 +60,7 @@ export default function CreatePage() {
   const [createdColor, setCreatedColor] = useState<string>('#ff2d55');
   const [serverError, setServerError] = useState('');
   const [history, setHistory] = useState<SavedMessage[]>([]);
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
   // Edit modal state
   const [editSlug, setEditSlug] = useState<string | null>(null);
@@ -234,7 +235,7 @@ export default function CreatePage() {
 
   return (
     <main className="relative min-h-screen px-4 py-8 md:py-16 overflow-hidden">
-      <ParticleField color={heartColor} count={20} />
+      <ParticleField color={heartColor} count={isMobile ? 8 : 20} />
 
       <div className="relative z-10 max-w-5xl mx-auto">
         {/* ── Header ── */}

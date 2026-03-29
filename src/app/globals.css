@@ -805,3 +805,52 @@ textarea {
   border-radius: 16px;
   overflow: hidden;
 }
+
+/* ── Mobile Performance Optimizations ── */
+@media (max-width: 767px) {
+  /* Disable heavy background animations on mobile */
+  .cinematic-bg-layer {
+    animation: none;
+    opacity: 0.7;
+  }
+
+  .cinematic-light-rays {
+    display: none;
+  }
+
+  /* Reduce blur intensity on mobile */
+  .glass {
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  .glass-strong {
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  .glass-card {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* Reduce map 3D perspective on mobile — cheaper to render */
+  .map-svg-elevated {
+    transform: rotateX(2deg);
+    filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.3));
+  }
+
+  /* Performance hint for animated elements */
+  .map-platform-wrapper,
+  canvas {
+    will-change: transform;
+  }
+}
+
+/* GPU compositing hints for animated layers */
+.cinematic-bg-layer,
+.cinematic-light-rays,
+.cinematic-vignette {
+  will-change: transform, opacity;
+  transform: translateZ(0);
+}

@@ -168,7 +168,7 @@ export default function ParticleField({ color = '#ff2d55', count = 50 }: Particl
     <canvas
       ref={canvasRef}
       className="fixed inset-0 pointer-events-none"
-      style={{ zIndex: 0 }}
+      style={{ zIndex: 0, willChange: 'transform' }}
     />
   );
 }

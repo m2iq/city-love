@@ -204,14 +204,13 @@ function ProvinceLabel({
         x={label.x}
         y={label.y}
         textAnchor="middle"
-        fontFamily="var(--font-cairo), sans-serif"
+        fontFamily="var(--font-cairo), Cairo, sans-serif"
         fontSize={fontSize}
         fontWeight={isActive ? 800 : 600}
         fill={textColor}
         stroke="rgba(1, 8, 20, 0.88)"
         strokeWidth={3.5}
         paintOrder="stroke fill"
-        letterSpacing="0.15px"
       >
         {label.lines.map((line, index) => (
           <tspan key={line} x={label.x} dy={index === 0 ? 0 : lineHeight}>

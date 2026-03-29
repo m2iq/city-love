@@ -54,6 +54,8 @@ export default function CinematicExperience({ message }: CinematicExperienceProp
   const [hearting, setHearting] = useState(false);
   const [giftEmerged, setGiftEmerged] = useState(false);
   const [travelProgress, setTravelProgress] = useState(0);
+  // Detect mobile for performance optimizations
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
   const sender = provinces[message.sender_province];
   const receiver = provinces[message.receiver_province];
@@ -155,8 +157,8 @@ export default function CinematicExperience({ message }: CinematicExperienceProp
       <div className="cinematic-vignette fixed inset-0 z-1 pointer-events-none" />
 
       {/* Ambient particles */}
-      {phaseIndex >= 1 && <ParticleField color={heartColor} count={25} />}
-      {phaseIndex >= 3 && <FloatingHearts count={8} color={heartColor} />}
+      {phaseIndex >= 1 && <ParticleField color={heartColor} count={isMobile ? 10 : 25} />}
+      {phaseIndex >= 3 && <FloatingHearts count={isMobile ? 4 : 8} color={heartColor} />}
 
       {/* ═══ Phase 1: Dark Intro ═══ */}
       <AnimatePresence>

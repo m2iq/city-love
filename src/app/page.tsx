@@ -29,10 +29,12 @@ export default function HomePage() {
   const ctaRef = useRef<HTMLDivElement>(null);
   const ctaInView = useInView(ctaRef, { once: true, margin: '-80px' });
 
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
   return (
     <main className="relative overflow-hidden">
-      <ParticleField color="#ff2d55" count={35} />
-      <FloatingHearts count={10} />
+      <ParticleField color="#ff2d55" count={isMobile ? 12 : 35} />
+      <FloatingHearts count={isMobile ? 5 : 10} />
 
       {/* ═══════ HERO ═══════ */}
       <section className="relative min-h-screen flex flex-col items-center justify-center px-4 py-24">
